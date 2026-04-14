@@ -32,15 +32,17 @@ export type StreamingChunkBuffer = {
   readonly finish: () => void;
 };
 
+export type StreamingFlushCallback = (fullText: string, isFirstFlush: boolean) => void;
+
 export type StreamingChunkBufferOptions = {
-  readonly flush: (text: string) => void;
-  readonly maxChunkSize: number;
+  readonly flush: StreamingFlushCallback;
   readonly minFlushChars: number;
   readonly flushIntervalMs: number;
 };
 
 export const createStreamingChunkBuffer = (options: StreamingChunkBufferOptions): StreamingChunkBuffer => {
   let buffer = '';
+  let hasFlushed = false;
   let timer: NodeJS.Timeout | null = null;
 
   const clearTimer = (): void => {
@@ -53,14 +55,13 @@ export const createStreamingChunkBuffer = (options: StreamingChunkBufferOptions)
   const flushBuffer = (): void => {
     clearTimer();
     const next = buffer;
-    buffer = '';
     if (next.trim().length === 0) {
       return;
     }
 
-    for (const chunk of chunkMessage(next, options.maxChunkSize)) {
-      options.flush(chunk);
-    }
+    const isFirst = !hasFlushed;
+    hasFlushed = true;
+    options.flush(next, isFirst);
   };
 
   const scheduleFlush = (): void => {

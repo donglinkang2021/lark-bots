@@ -54,6 +54,7 @@ export type BridgeConfig = {
   readonly minEventIntervalMs: number;
   readonly streamingFlushIntervalMs: number;
   readonly streamingMinFlushChars: number;
+  readonly streamingUpdateIntervalMs: number;
   readonly claudeTimeoutMs: number;
   readonly maxPromptChars: number;
   readonly stateFilePath: string;
@@ -97,6 +98,7 @@ export const loadConfig = (): BridgeConfig => {
     minEventIntervalMs: parsePositiveInt(process.env.MIN_EVENT_INTERVAL_MS, 1000),
     streamingFlushIntervalMs: parsePositiveInt(process.env.STREAMING_FLUSH_INTERVAL_MS, 750),
     streamingMinFlushChars: parsePositiveInt(process.env.STREAMING_MIN_FLUSH_CHARS, 120),
+    streamingUpdateIntervalMs: parsePositiveInt(process.env.STREAMING_UPDATE_INTERVAL_MS, 1500),
     claudeTimeoutMs: parsePositiveInt(process.env.CLAUDE_TIMEOUT_MS, 600_000),
     maxPromptChars: parsePositiveInt(process.env.MAX_PROMPT_CHARS, 8_000),
     stateFilePath: resolvePath(process.env.STATE_FILE_PATH, path.resolve(process.cwd(), 'data/state.json')),

@@ -25,6 +25,7 @@ const baseConfig: BridgeConfig = {
   minEventIntervalMs: 0,
   streamingFlushIntervalMs: 750,
   streamingMinFlushChars: 120,
+  streamingUpdateIntervalMs: 1500,
   claudeTimeoutMs: 1000,
   maxPromptChars: 1000,
   stateFilePath: '/tmp/state.json',

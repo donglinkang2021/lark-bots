@@ -136,6 +136,10 @@ export class ClaudeProcess {
       env.ANTHROPIC_DEFAULT_HAIKU_MODEL = this.config.anthropicDefaultHaikuModel;
     }
 
+    if (this.config.claudePermissionMode === 'bypassPermissions') {
+      env.IS_SANDBOX = '1';
+    }
+
     return env;
   }
 
@@ -312,7 +316,11 @@ export class ClaudeProcess {
       args.push('--resume', session.claudeSessionId);
     }
 
-    args.push('--permission-mode', this.config.claudePermissionMode);
+    if (this.config.claudePermissionMode === 'bypassPermissions') {
+      args.push('--dangerously-skip-permissions');
+    } else {
+      args.push('--permission-mode', this.config.claudePermissionMode);
+    }
 
     if (this.config.claudeModel) {
       args.push('--model', this.config.claudeModel);

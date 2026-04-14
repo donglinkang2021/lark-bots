@@ -31,6 +31,7 @@ const makeConfig = (tempDir: string, overrides: Partial<BridgeConfig> = {}): Bri
   minEventIntervalMs: 0,
   streamingFlushIntervalMs: 750,
   streamingMinFlushChars: 120,
+  streamingUpdateIntervalMs: 1500,
   claudeTimeoutMs: 1000,
   maxPromptChars: 1000,
   stateFilePath: path.join(tempDir, 'state.json'),
@@ -86,9 +87,21 @@ class FakeClaudeProcess {
 
 class FakeReplyClient {
   public readonly replies: string[] = [];
+  public readonly cardReplies: string[] = [];
+  public readonly updates: Array<{ messageId: string; text: string }> = [];
 
-  public async replyToMessage(_messageId: string, text: string): Promise<void> {
+  public async replyToMessage(_messageId: string, text: string): Promise<string | null> {
     this.replies.push(text);
+    return `om_fake_${this.replies.length}`;
+  }
+
+  public async replyCardToMessage(_messageId: string, text: string): Promise<string | null> {
+    this.cardReplies.push(text);
+    return `om_card_${this.cardReplies.length}`;
+  }
+
+  public async updateMessage(messageId: string, text: string): Promise<void> {
+    this.updates.push({ messageId, text });
   }
 }
 
@@ -107,14 +120,17 @@ describe('BridgeService', () => {
     );
 
     await bridge.handleEvent(makeEvent('hello'));
-    expect(replyClient.replies[0]).toContain('正在思考');
-    expect(replyClient.replies[1]).toContain('hello from claude');
+    // Ack is sent as card reply
+    expect(replyClient.cardReplies[0]).toContain('正在思考');
+    // Non-streaming: final result sent as update or reply
+    const allText = [...replyClient.replies, ...replyClient.updates.map((u) => u.text)].join(' ');
+    expect(allText).toContain('hello from claude');
     expect(store.snapshot().sessions.oc_1?.claudeSessionId).toBe('claude-session-1');
 
     await bridge.handleEvent(makeEvent('/status', 'evt_2'));
-    const statusReply = replyClient.replies.slice(2).find((r) => r.includes('conversation: oc_1'));
+    const statusReply = replyClient.replies.find((r) => r.includes('conversation: oc_1'));
     expect(statusReply).toContain('conversation: oc_1');
-    const sessionIdReply = replyClient.replies.slice(2).find((r) => r.includes('claude_session_id'));
+    const sessionIdReply = replyClient.replies.find((r) => r.includes('claude_session_id'));
     expect(sessionIdReply).toContain('claude_session_id: claude-session-1');
 
     await bridge.handleEvent(makeEvent('/reset', 'evt_3'));
@@ -180,6 +196,7 @@ describe('BridgeService', () => {
     const config = makeConfig(tempDir, {
       streamingFlushIntervalMs: 10,
       streamingMinFlushChars: 5,
+      streamingUpdateIntervalMs: 0,
     });
     const stateFile = new StateFile(config.stateFilePath);
     const store = new SessionStore(stateFile, config.projectRoot);
@@ -194,8 +211,12 @@ describe('BridgeService', () => {
     await vi.runAllTimersAsync();
     await promise;
 
-    expect(replyClient.replies.length).toBeGreaterThan(0);
-    expect(replyClient.replies.join(' ')).toContain('hello');
+    // Ack reply + at least one update
+    expect(replyClient.cardReplies.length).toBeGreaterThan(0);
+    expect(replyClient.updates.length).toBeGreaterThan(0);
+    // Final update should contain the full result
+    const lastUpdate = replyClient.updates.at(-1);
+    expect(lastUpdate?.text).toContain('hello streaming world');
     expect(store.snapshot().sessions.oc_1?.claudeSessionId).toBe('claude-session-2');
     vi.useRealTimers();
   });

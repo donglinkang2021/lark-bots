@@ -115,9 +115,10 @@ export class BridgeService {
 
     // Send immediate ack so the user knows the message was received
     logger.info('Sending ack reply', { messageId: event.messageId });
+    let ackMessageId: string | null = null;
     try {
-      await this.sendReply(event.messageId, '正在思考...');
-      logger.info('Ack reply sent', { messageId: event.messageId });
+      ackMessageId = await this.replyClient.replyCardToMessage(event.messageId, '正在思考...');
+      logger.info('Ack reply sent', { messageId: event.messageId, ackMessageId });
     } catch (error) {
       logger.warn('Failed to send ack reply', {
         messageId: event.messageId,
@@ -127,6 +128,7 @@ export class BridgeService {
 
     let streamedAnyOutput = false;
     let replyChain = Promise.resolve();
+    let lastUpdateTime = 0;
 
     try {
       logger.info('Starting Claude execution', {
@@ -135,13 +137,40 @@ export class BridgeService {
         prompt: command.prompt,
       });
 
-      const flushReply = (text: string): void => {
+      const flushReply = (fullText: string, isFirstFlush: boolean): void => {
         streamedAnyOutput = true;
-        replyChain = replyChain.then(() => this.sendReply(event.messageId, text));
+
+        replyChain = replyChain.then(async () => {
+          try {
+            if (isFirstFlush && ackMessageId) {
+              // Update the ack message with first real content
+              await this.replyClient.updateMessage(ackMessageId, fullText);
+            } else if (ackMessageId) {
+              // Throttle updates to avoid hitting Feishu API rate limits
+              const now = Date.now();
+              const elapsed = now - lastUpdateTime;
+              if (elapsed < this.config.streamingUpdateIntervalMs) {
+                return;
+              }
+              await this.replyClient.updateMessage(ackMessageId, fullText);
+            } else {
+              // No ack message ID — fall back to creating new replies
+              for (const chunk of chunkMessage(fullText, this.config.replyChunkSize)) {
+                await this.replyClient.replyToMessage(event.messageId, chunk);
+              }
+            }
+            lastUpdateTime = Date.now();
+          } catch (error) {
+            logger.warn('Failed to update streaming message', {
+              messageId: event.messageId,
+              error: error instanceof Error ? error.message : String(error),
+            });
+          }
+        });
       };
+
       const streamingBuffer = createStreamingChunkBuffer({
         flush: flushReply,
-        maxChunkSize: this.config.replyChunkSize,
         minFlushChars: this.config.streamingMinFlushChars,
         flushIntervalMs: this.config.streamingFlushIntervalMs,
       });
@@ -153,6 +182,20 @@ export class BridgeService {
       });
       streamingBuffer.finish();
       await replyChain;
+
+      // Final update with the complete result
+      if (ackMessageId && result.result.trim()) {
+        try {
+          await this.replyClient.updateMessage(ackMessageId, result.result);
+          lastUpdateTime = Date.now();
+        } catch (error) {
+          logger.warn('Failed to send final update', {
+            messageId: event.messageId,
+            error: error instanceof Error ? error.message : String(error),
+          });
+        }
+      }
+
       logger.info('Claude execution completed', {
         messageId: event.messageId,
         conversationKey: session.conversationKey,

@@ -29,10 +29,9 @@ describe('parseCommand', () => {
 
 describe('createStreamingChunkBuffer', () => {
   it('buffers small deltas until flushed', () => {
-    const flush = vi.fn<(text: string) => void>();
+    const flush = vi.fn<(text: string, isFirstFlush: boolean) => void>();
     const buffer = createStreamingChunkBuffer({
       flush,
-      maxChunkSize: 50,
       minFlushChars: 20,
       flushIntervalMs: 1000,
     });
@@ -44,29 +43,27 @@ describe('createStreamingChunkBuffer', () => {
 
     buffer.finish();
 
-    expect(flush).toHaveBeenCalledWith('hello world');
+    expect(flush).toHaveBeenCalledWith('hello world', true);
   });
 
   it('flushes immediately on newline boundaries', () => {
-    const flush = vi.fn<(text: string) => void>();
+    const flush = vi.fn<(text: string, isFirstFlush: boolean) => void>();
     const buffer = createStreamingChunkBuffer({
       flush,
-      maxChunkSize: 50,
       minFlushChars: 100,
       flushIntervalMs: 1000,
     });
 
     buffer.push('line 1\n');
 
-    expect(flush).toHaveBeenCalledWith('line 1\n');
+    expect(flush).toHaveBeenCalledWith('line 1\n', true);
   });
 
   it('flushes on timer and preserves order', () => {
     vi.useFakeTimers();
-    const flush = vi.fn<(text: string) => void>();
+    const flush = vi.fn<(text: string, isFirstFlush: boolean) => void>();
     const buffer = createStreamingChunkBuffer({
       flush,
-      maxChunkSize: 50,
       minFlushChars: 100,
       flushIntervalMs: 200,
     });
@@ -76,11 +73,11 @@ describe('createStreamingChunkBuffer', () => {
     expect(flush).not.toHaveBeenCalled();
 
     vi.advanceTimersByTime(1);
-    expect(flush).toHaveBeenCalledWith('hello');
+    expect(flush).toHaveBeenCalledWith('hello', true);
 
     buffer.push(' world');
     buffer.finish();
-    expect(flush).toHaveBeenNthCalledWith(2, ' world');
+    expect(flush).toHaveBeenNthCalledWith(2, 'hello world', false);
     vi.useRealTimers();
   });
 });

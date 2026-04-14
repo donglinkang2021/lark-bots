@@ -1,6 +1,6 @@
 node_modules/
 .env
-data/*.lock
+data/
 coverage/
 tmp-bridge-service-*/
 tmp-session-store-*/
