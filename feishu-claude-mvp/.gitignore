@@ -1,0 +1,7 @@
+node_modules/
+.env
+data/*.lock
+coverage/
+tmp-bridge-service-*/
+tmp-session-store-*/
+docs/.*.swp
