@@ -1,5 +1,6 @@
 import { spawn } from 'node:child_process';
 import type { BridgeConfig } from '../config.js';
+import { logger } from '../utils/logger.js';
 import type { SessionRecord } from '../session/sessionTypes.js';
 
 export type ClaudeRunResult = {
@@ -192,6 +193,16 @@ export class ClaudeProcess {
     const args = this.buildStreamArgs(session, prompt);
 
     return new Promise((resolve, reject) => {
+      const childEnv = this.buildChildEnv();
+      logger.info('Spawning Claude CLI', {
+        cmd: this.config.claudeCliPath,
+        args,
+        permissionMode: this.config.claudePermissionMode,
+        ANTHROPIC_BASE_URL: childEnv.ANTHROPIC_BASE_URL,
+        ANTHROPIC_AUTH_TOKEN: childEnv.ANTHROPIC_AUTH_TOKEN ? '(set)' : '(not set)',
+        ANTHROPIC_DEFAULT_OPUS_MODEL: childEnv.ANTHROPIC_DEFAULT_OPUS_MODEL,
+        ANTHROPIC_DEFAULT_SONNET_MODEL: childEnv.ANTHROPIC_DEFAULT_SONNET_MODEL,
+      });
       const child = spawn(this.config.claudeCliPath, args, {
         cwd: this.config.projectRoot,
         env: this.buildChildEnv(),
@@ -266,6 +277,7 @@ export class ClaudeProcess {
       child.on('close', (code) => {
         clearTimeout(timeout);
         if (code !== 0) {
+          logger.error('Claude CLI stream exited non-zero', { code, stderr: stderr.trim().slice(0, 500) });
           reject(new Error(extractErrorMessage(stdout, stderr, code)));
           return;
         }

@@ -1,7 +1,7 @@
 import { config as loadEnv } from 'dotenv';
 import path from 'node:path';
 
-loadEnv();
+loadEnv({ override: true });
 
 const splitCsv = (value: string | undefined): string[] =>
   value

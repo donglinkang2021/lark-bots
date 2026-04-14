@@ -9,9 +9,12 @@ A minimal Node.js bridge that listens to Feishu IM events through `lark-cli`, fo
 - Maintains one Claude session per Feishu conversation
 - Continues multi-turn Claude sessions with `--resume <session_id>`
 - Replies to the originating Feishu message using `lark-cli im +messages-reply`
+- Sends an immediate "正在思考..." acknowledgment on message receipt
+- Streams partial Claude replies in real-time via chunked message appending
+- Sends a startup notification to the configured sender when the bridge launches
 - Persists only lightweight session/event metadata in `data/state.json`
+- Supports GLM or other Anthropic-compatible backends via environment variables
 - Applies basic hardening:
-  - serialized event handling
   - atomic lock file creation with stale-lock recovery
   - sanitized subprocess environments
   - safe user-facing error replies
@@ -27,6 +30,7 @@ A minimal Node.js bridge that listens to Feishu IM events through `lark-cli`, fo
 - `src/claude/` — Claude CLI wrapper and response chunking
 - `src/session/` — session/state types and store
 - `src/persistence/stateFile.ts` — atomic JSON persistence
+- `scripts/stop.js` — graceful bridge shutdown
 - `docs/` — architecture, streaming design, and testing notes
 - `test/` — unit and integration tests
 
@@ -54,18 +58,35 @@ A minimal Node.js bridge that listens to Feishu IM events through `lark-cli`, fo
    - `STREAMING_FLUSH_INTERVAL_MS`
    - `STREAMING_MIN_FLUSH_CHARS`
 
+### GLM / Custom backend
+
+To route Claude CLI requests through a GLM or other Anthropic-compatible backend, set these environment variables:
+
+| Variable | Description |
+|---|---|
+| `ANTHROPIC_BASE_URL` | Base URL of the compatible API endpoint |
+| `ANTHROPIC_AUTH_TOKEN` | API key / auth token for the backend |
+| `ANTHROPIC_DEFAULT_OPUS_MODEL` | Model name to use for Opus-tier requests |
+| `ANTHROPIC_DEFAULT_SONNET_MODEL` | Model name to use for Sonnet-tier requests |
+| `ANTHROPIC_DEFAULT_HAIKU_MODEL` | Model name to use for Haiku-tier requests |
+
+These are passed through to the Claude CLI subprocess as environment variables, overriding the default Anthropic endpoints.
+
 ## Run
 
 ```bash
 npm install
+npm start        # start the bridge
+npm run stop     # gracefully stop the bridge
+```
+
+For development with auto-restart on file changes:
+
+```bash
 npm run dev
 ```
 
-Or once:
-
-```bash
-npm start
-```
+`npm run stop` reads the PID from `data/bridge.lock` and sends `SIGINT` for a graceful shutdown that cleans up the lock file and subscriber processes. If the bridge is not running, it reports that no lock file was found.
 
 ## Commands in Feishu
 
@@ -91,9 +112,9 @@ See also:
 - Text messages only
 - Single configured project root
 - Private assistant use only; not designed for group chat workflows yet
-- Streaming replies now use appended reply chunks, not message edits
+- Streaming replies use appended reply chunks, not message edits
 - Global event handling is still serialized, so one long run can delay other conversations
-- The Claude subprocess currently inherits the local bridge environment for auth compatibility; run this only in a trusted local setup
+- The Claude subprocess inherits the local bridge environment for auth compatibility; run this only in a trusted local setup
 - Rate-limit responses may be chunked when reply size is small
 
 ## Suggested next steps
