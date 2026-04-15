@@ -32,18 +32,25 @@
 
 ```bash
 # npm 全局安装
-npm install -g @anthropic-ai/lark-cli
+npm install -g @larksuite/cli
 
-# 或使用官方安装脚本（参考 lark-cli 文档）
+# 安装 AI Agent Skills（推荐）
+npx skills add larksuite/cli -y -g
 ```
 
-安装完成后登录飞书：
+安装完成后配置应用凭据并登录：
 
 ```bash
-lark-cli auth login
+# 1. 配置飞书应用凭据（App ID / App Secret，交互式引导）
+lark-cli config init
+
+# 2. 登录授权（--recommend 自动选择常用权限）
+lark-cli auth login --recommend
 ```
 
-按提示完成扫码或网页授权。登录成功后，lark-cli 会自动管理 token 刷新。
+按提示完成网页授权。登录成功后，lark-cli 会自动管理 token 刷新。
+
+> 也可以指定精确权限登录：`lark-cli auth login --scope "im:message"`
 
 ### 第二步：创建飞书自建应用
 
