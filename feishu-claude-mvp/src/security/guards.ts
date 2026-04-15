@@ -19,7 +19,11 @@ export const assertEventAllowed = (config: BridgeConfig, event: IncomingMessageE
     throw new Error(`sender is not allowed: ${event.senderId}`);
   }
 
-  if (!chatAllowed) {
+  // If sender is in the allowlist, skip chat check — allows the bot to work
+  // in any group it's added to without needing to list every chat_id.
+  if (senderAllowed && senderEnforced) {
+    // sender is explicitly allowed, chat restriction is waived
+  } else if (!chatAllowed) {
     throw new Error(`chat is not allowed: ${event.chatId}`);
   }
 

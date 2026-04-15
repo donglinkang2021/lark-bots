@@ -77,7 +77,7 @@ lark-cli auth login
 
 ```bash
 # 通过 lark-cli 搜索自己
-lark-cli contact +search --keyword "你的姓名"
+lark-cli contact +search-user --query "你的姓名" --format pretty
 ```
 
 返回结果中的 `open_id` 字段即为所需值。
