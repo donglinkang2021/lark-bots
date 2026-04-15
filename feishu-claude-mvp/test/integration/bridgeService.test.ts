@@ -103,6 +103,10 @@ class FakeReplyClient {
   public async updateMessage(messageId: string, text: string): Promise<void> {
     this.updates.push({ messageId, text });
   }
+
+  public async updateFinalMessage(messageId: string, text: string): Promise<void> {
+    this.updates.push({ messageId, text });
+  }
 }
 
 describe('BridgeService', () => {

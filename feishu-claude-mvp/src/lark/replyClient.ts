@@ -1,6 +1,8 @@
 import { spawn } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import type { BridgeConfig } from '../config.js';
+import { buildStreamingCardContent, buildFinalCardContent } from './cardBuilder.js';
+import type { RenderMode } from '../session/sessionTypes.js';
 
 const safeEnv = (): NodeJS.ProcessEnv => {
   const allowedKeys = ['HOME', 'PATH', 'USER', 'LOGNAME', 'SHELL', 'TERM', 'LANG', 'LC_ALL', 'TMPDIR', 'TMP', 'TEMP'];
@@ -16,21 +18,6 @@ const safeEnv = (): NodeJS.ProcessEnv => {
 
 const textToJsonContent = (text: string): string =>
   JSON.stringify({ text });
-
-/**
- * Build an interactive card JSON content string from plain text.
- * Cards are required for PATCH updates — plain text messages cannot be updated.
- */
-const textToCardContent = (text: string): string =>
-  JSON.stringify({
-    config: { wide_screen_mode: true },
-    elements: [
-      {
-        tag: 'div',
-        text: { tag: 'plain_text', content: text },
-      },
-    ],
-  });
 
 type RunResult = {
   readonly stdout: string;
@@ -105,16 +92,17 @@ export class ReplyClient {
 
   /**
    * Reply to a message with an interactive card (updatable via updateMessage).
-   * Returns the created message ID for subsequent updates.
+   * Uses streaming card content (no formula image rendering — fast).
    */
-  public async replyCardToMessage(messageId: string, text: string): Promise<string | null> {
+  public async replyCardToMessage(messageId: string, text: string, mode: RenderMode = 'card'): Promise<string | null> {
+    const cardContent = buildStreamingCardContent(text, mode);
     const { stdout } = await runLarkCli(this.config, [
       'im',
       '+messages-reply',
       '--as', 'bot',
       '--message-id', messageId,
       '--msg-type', 'interactive',
-      '--content', textToCardContent(text),
+      '--content', cardContent,
       '--idempotency-key', randomUUID(),
     ]);
 
@@ -122,11 +110,25 @@ export class ReplyClient {
   }
 
   /**
-   * Update an existing card message with new text content.
-   * Only works on interactive (card) messages — plain text messages cannot be updated.
+   * Update an existing card message during streaming (fast, no formula rendering).
    */
-  public async updateMessage(messageId: string, text: string): Promise<void> {
-    const body = JSON.stringify({ content: textToCardContent(text) });
+  public async updateMessage(messageId: string, text: string, mode: RenderMode = 'card'): Promise<void> {
+    const cardContent = buildStreamingCardContent(text, mode);
+    const body = JSON.stringify({ content: cardContent });
+
+    await runLarkCli(this.config, [
+      'api', 'PATCH', `/open-apis/im/v1/messages/${messageId}`,
+      '--as', 'bot',
+      '--data', body,
+    ]);
+  }
+
+  /**
+   * Final update after Claude completes — renders LaTeX formulas to images.
+   */
+  public async updateFinalMessage(messageId: string, text: string, mode: RenderMode = 'card'): Promise<void> {
+    const cardContent = await buildFinalCardContent(text, mode, this.config);
+    const body = JSON.stringify({ content: cardContent });
 
     await runLarkCli(this.config, [
       'api', 'PATCH', `/open-apis/im/v1/messages/${messageId}`,

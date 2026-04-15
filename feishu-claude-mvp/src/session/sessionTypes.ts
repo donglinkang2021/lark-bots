@@ -1,4 +1,5 @@
 export type SessionStatus = 'idle' | 'running' | 'error';
+export type RenderMode = 'card' | 'text';
 
 export type SessionRecord = {
   readonly conversationKey: string;
@@ -12,6 +13,7 @@ export type SessionRecord = {
   readonly lastMessageId: string | null;
   readonly status: SessionStatus;
   readonly lastEventAt: string | null;
+  readonly renderMode: RenderMode;
 };
 
 export type PersistedState = {

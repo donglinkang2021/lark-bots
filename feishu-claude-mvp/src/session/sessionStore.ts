@@ -1,6 +1,6 @@
 import type { StateFile } from '../persistence/stateFile.js';
 import type { IncomingMessageEvent } from '../lark/types.js';
-import type { PersistedState, SessionRecord, SessionStatus } from './sessionTypes.js';
+import type { PersistedState, SessionRecord, SessionStatus, RenderMode } from './sessionTypes.js';
 
 const MAX_PROCESSED_EVENTS = 200;
 
@@ -33,6 +33,16 @@ export class SessionStore {
     const key = conversationKeyFor(event);
     const existing = this.state.sessions[key];
     if (existing) {
+      // Back-fill renderMode for sessions created before the field existed
+      if (!existing.renderMode) {
+        const patched: SessionRecord = { ...existing, renderMode: 'card' as RenderMode };
+        this.state = {
+          ...this.state,
+          sessions: { ...this.state.sessions, [key]: patched },
+        };
+        this.persist();
+        return patched;
+      }
       return existing;
     }
 
@@ -48,6 +58,7 @@ export class SessionStore {
       status: 'idle',
       lastMessageId: event.messageId,
       lastEventAt: event.timestamp,
+      renderMode: 'card',
     };
 
     this.state = {

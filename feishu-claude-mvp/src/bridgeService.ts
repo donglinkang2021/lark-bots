@@ -8,6 +8,7 @@ import type { IncomingMessageEvent } from './lark/types.js';
 import { helpMessage, parseCommand } from './router/commandRouter.js';
 import { assertEventAllowed } from './security/guards.js';
 import { SessionStore } from './session/sessionStore.js';
+import type { RenderMode } from './session/sessionTypes.js';
 import { logger } from './utils/logger.js';
 
 const SAFE_FAILURE_REPLY = 'Claude execution failed. Check the bridge logs for details.';
@@ -91,6 +92,7 @@ export class BridgeService {
         ? [
             `conversation: ${currentSession.conversationKey}`,
             `status: ${currentSession.status}`,
+            `render_mode: ${currentSession.renderMode}`,
             `claude_session_id: ${currentSession.claudeSessionId ?? '(none)'}`,
             `updated_at: ${currentSession.updatedAt}`,
           ]
@@ -107,6 +109,22 @@ export class BridgeService {
       return;
     }
 
+    if (command.type === 'markdown') {
+      this.sessionStore.updateSession(session.conversationKey, { renderMode: 'text' });
+      await this.sendReply(event.messageId, 'Switched to plain text mode. Use /card to switch back to rich card mode.');
+      this.sessionStore.markProcessed(event.eventId);
+      return;
+    }
+
+    if (command.type === 'card') {
+      this.sessionStore.updateSession(session.conversationKey, { renderMode: 'card' });
+      await this.sendReply(event.messageId, 'Switched to rich card mode. Use /markdown or /md to switch back to plain text mode.');
+      this.sessionStore.markProcessed(event.eventId);
+      return;
+    }
+
+    const renderMode: RenderMode = session.renderMode;
+
     this.sessionStore.updateSession(session.conversationKey, {
       status: 'running',
       lastMessageId: event.messageId,
@@ -117,7 +135,7 @@ export class BridgeService {
     logger.info('Sending ack reply', { messageId: event.messageId });
     let ackMessageId: string | null = null;
     try {
-      ackMessageId = await this.replyClient.replyCardToMessage(event.messageId, '正在思考...');
+      ackMessageId = await this.replyClient.replyCardToMessage(event.messageId, '正在思考...', renderMode);
       logger.info('Ack reply sent', { messageId: event.messageId, ackMessageId });
     } catch (error) {
       logger.warn('Failed to send ack reply', {
@@ -144,7 +162,7 @@ export class BridgeService {
           try {
             if (isFirstFlush && ackMessageId) {
               // Update the ack message with first real content
-              await this.replyClient.updateMessage(ackMessageId, fullText);
+              await this.replyClient.updateMessage(ackMessageId, fullText, renderMode);
             } else if (ackMessageId) {
               // Throttle updates to avoid hitting Feishu API rate limits
               const now = Date.now();
@@ -152,7 +170,7 @@ export class BridgeService {
               if (elapsed < this.config.streamingUpdateIntervalMs) {
                 return;
               }
-              await this.replyClient.updateMessage(ackMessageId, fullText);
+              await this.replyClient.updateMessage(ackMessageId, fullText, renderMode);
             } else {
               // No ack message ID — fall back to creating new replies
               for (const chunk of chunkMessage(fullText, this.config.replyChunkSize)) {
@@ -183,10 +201,10 @@ export class BridgeService {
       streamingBuffer.finish();
       await replyChain;
 
-      // Final update with the complete result
+      // Final update with the complete result — renders LaTeX formulas to images
       if (ackMessageId && result.result.trim()) {
         try {
-          await this.replyClient.updateMessage(ackMessageId, result.result);
+          await this.replyClient.updateFinalMessage(ackMessageId, result.result, renderMode);
           lastUpdateTime = Date.now();
         } catch (error) {
           logger.warn('Failed to send final update', {

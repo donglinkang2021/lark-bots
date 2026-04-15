@@ -13,10 +13,12 @@ export type IncomingMessageEvent = {
 };
 
 
-export type SupportedCommand = 'help' | 'status' | 'reset' | 'prompt';
+export type SupportedCommand = 'help' | 'status' | 'reset' | 'markdown' | 'card' | 'prompt';
 
 export type Command =
   | { readonly type: 'help' }
   | { readonly type: 'status' }
   | { readonly type: 'reset' }
+  | { readonly type: 'markdown' }
+  | { readonly type: 'card' }
   | { readonly type: 'prompt'; readonly prompt: string };
