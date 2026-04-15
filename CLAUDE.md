@@ -33,7 +33,7 @@ Feishu IM
   -> lark-cli event +subscribe (WebSocket)
   -> eventParser (NDJSON lines)
   -> bridgeService.handleEvent()
-    -> commandRouter (/help, /status, /reset, /markdown, /card, or prompt)
+    -> commandRouter (/help, /status, /reset, /markdown, /card, /cd, or prompt)
     -> claudeProcess.runPromptStream() (claude CLI subprocess)
     -> streamingBuffer (flush on newline / min chars / timer)
     -> replyClient (ack card -> streaming PATCH updates -> final PATCH with formulas)

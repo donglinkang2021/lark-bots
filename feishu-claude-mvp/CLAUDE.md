@@ -20,7 +20,7 @@ Feishu IM
   -> lark-cli event +subscribe
   -> eventParser (NDJSON lines)
   -> bridgeService.handleEvent()
-    -> commandRouter (/help, /status, /reset, /markdown, /card, or prompt)
+    -> commandRouter (/help, /status, /reset, /markdown, /card, /cd, or prompt)
     -> claudeProcess.runPromptStream() (claude CLI subprocess)
     -> streamingBuffer (flush on newline / min chars / timer)
     -> replyClient (ack card -> streaming PATCH updates -> final PATCH with formulas)
@@ -50,15 +50,18 @@ Feishu IM
 | Command | Aliases | Effect |
 |---------|---------|--------|
 | `/help` | - | Show all commands |
-| `/status` | - | Show session info (conversation, status, render_mode, claude_session_id) |
+| `/status` | - | Show session info (conversation, status, render_mode, working_dir, claude_session_id) |
 | `/reset` | - | Delete session, start fresh next message |
 | `/markdown` | `/md` | Switch to plain text mode |
 | `/card` | - | Switch to rich card mode (default) |
+| `/cd <path>` | - | Change working directory (loads .claude/ config, clears Claude session) |
+| `/cd` | - | Show current working directory |
+| `/cd -` | - | Reset to project root |
 
 ## Message Flow
 
 1. Event arrives -> dedup + security check + rate limit
-2. Command route: `/help|/status|/reset|/markdown|/card` handled directly
+2. Command route: `/help|/status|/reset|/markdown|/card|/cd` handled directly
 3. For prompts: send ack card ("正在思考...") -> start Claude stream
 4. Stream deltas accumulate in buffer -> flush to card PATCH updates (throttled)
 5. On completion: final PATCH with `buildFinalCardContent()` (renders LaTeX to images in card mode)
