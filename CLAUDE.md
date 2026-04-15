@@ -6,7 +6,7 @@ Feishu/Lark bot projects using lark-cli and Claude Code.
 
 ### feishu-claude-mvp
 
-A Node.js bridge that connects Feishu IM to a local Claude CLI session, forwarding messages in both directions with streaming support.
+A Node.js bridge that connects Feishu IM to a local Claude CLI session, with streaming support, rich card rendering, and LaTeX formula images.
 
 ## Tech Stack
 
@@ -14,6 +14,7 @@ A Node.js bridge that connects Feishu IM to a local Claude CLI session, forwardi
 - **IM transport**: lark-cli (Feishu CLI)
 - **AI backend**: Claude CLI (supports GLM/Anthropic-compatible backends)
 - **Testing**: Vitest
+- **Formula rendering**: texsvg (LaTeX -> SVG), sharp (SVG -> PNG)
 
 ## Key Commands (feishu-claude-mvp)
 
@@ -28,10 +29,15 @@ npm run typecheck # TypeScript type checking
 ## Architecture (feishu-claude-mvp)
 
 ```
-Feishu IM → lark-cli event +subscribe → eventParser → bridgeService.handleEvent()
-  → commandRouter (parse /help, /status, /reset, or prompt)
-  → claudeProcess.runPromptStream() → Claude CLI subprocess
-  → streamingBuffer → replyClient.replyToMessage() → lark-cli im +messages-reply → Feishu IM
+Feishu IM
+  -> lark-cli event +subscribe (WebSocket)
+  -> eventParser (NDJSON lines)
+  -> bridgeService.handleEvent()
+    -> commandRouter (/help, /status, /reset, /markdown, /card, or prompt)
+    -> claudeProcess.runPromptStream() (claude CLI subprocess)
+    -> streamingBuffer (flush on newline / min chars / timer)
+    -> replyClient (ack card -> streaming PATCH updates -> final PATCH with formulas)
+    -> Feishu IM
 ```
 
 Key files:
@@ -39,8 +45,11 @@ Key files:
 - `src/bridgeService.ts` — orchestration, rate limiting, lock mechanism
 - `src/config.ts` — environment loading and validation
 - `src/claude/claudeProcess.ts` — Claude CLI subprocess wrapper (supports custom backend env vars)
+- `src/claude/formulaRenderer.ts` — LaTeX -> SVG -> PNG -> Feishu image upload
+- `src/claude/responseFormatter.ts` — chunk splitting, streaming buffer
+- `src/lark/cardBuilder.ts` — JSON 2.0 / 1.0 card content builders
+- `src/lark/replyClient.ts` — message reply, card reply, PATCH updates
 - `src/lark/subscribeRunner.ts` — lark-cli event subscription
-- `src/lark/replyClient.ts` — message reply and proactive send
 - `src/session/sessionStore.ts` — session CRUD, event dedup
 
 ## GLM Backend
@@ -60,3 +69,13 @@ These are injected into the Claude CLI subprocess environment via `buildChildEnv
 - **Error handling** — always handle errors explicitly, log context on server side, safe messages to users
 - **Lock file** — `data/bridge.lock` with PID for single-instance enforcement and graceful `npm run stop`
 - **No secrets in code** — all credentials via `.env` (gitignored)
+
+## Project-Specific Configuration
+
+Each sub-project has its own `.claude/` directory with project-specific rules and skills:
+
+- `feishu-claude-mvp/CLAUDE.md` — detailed architecture, message flow, and gotchas
+- `feishu-claude-mvp/.claude/rules/feishu-cards.md` — Feishu card API constraints (JSON 2.0 vs 1.0, img limitations)
+- `feishu-claude-mvp/.claude/rules/bridge-conventions.md` — code style, subprocess patterns, state management, testing
+- `feishu-claude-mvp/.claude/rules/formula-rendering.md` — formula pipeline, canvas constants, tuning guide
+- `feishu-claude-mvp/.claude/skills/feishu-bridge-dev/` — development skill for common tasks and debugging
