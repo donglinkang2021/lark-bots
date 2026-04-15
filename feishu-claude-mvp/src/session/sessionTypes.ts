@@ -14,6 +14,7 @@ export type SessionRecord = {
   readonly status: SessionStatus;
   readonly lastEventAt: string | null;
   readonly renderMode: RenderMode;
+  readonly workingDir: string | null;
 };
 
 export type PersistedState = {

@@ -60,7 +60,20 @@ describe('assertEventAllowed', () => {
     ).toThrow('sender is not allowed');
   });
 
-  it('enforces chat allowlist only when configured', () => {
+  it('enforces chat allowlist only when configured and sender is not allowed', () => {
+    expect(() =>
+      assertEventAllowed(
+        {
+          ...baseConfig,
+          allowedSenderIds: [],
+          allowedChatIds: ['oc_allowed'],
+        },
+        baseEvent,
+      ),
+    ).toThrow('chat is not allowed');
+  });
+
+  it('waives chat check when sender is explicitly allowed', () => {
     expect(() =>
       assertEventAllowed(
         {
@@ -69,6 +82,6 @@ describe('assertEventAllowed', () => {
         },
         baseEvent,
       ),
-    ).toThrow('chat is not allowed');
+    ).not.toThrow();
   });
 });

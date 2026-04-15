@@ -43,6 +43,18 @@ export class SessionStore {
         this.persist();
         return patched;
       }
+
+      // Back-fill workingDir for sessions created before the field existed
+      if (existing.workingDir === undefined) {
+        const patched: SessionRecord = { ...existing, workingDir: null };
+        this.state = {
+          ...this.state,
+          sessions: { ...this.state.sessions, [key]: patched },
+        };
+        this.persist();
+        return patched;
+      }
+
       return existing;
     }
 
@@ -59,6 +71,7 @@ export class SessionStore {
       lastMessageId: event.messageId,
       lastEventAt: event.timestamp,
       renderMode: 'card',
+      workingDir: null,
     };
 
     this.state = {

@@ -1,4 +1,6 @@
 import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import type { BridgeConfig } from './config.js';
 import { ClaudeProcess } from './claude/claudeProcess.js';
 import { chunkMessage, createStreamingChunkBuffer } from './claude/responseFormatter.js';
@@ -17,6 +19,22 @@ const RATE_LIMIT_REPLY = 'Please wait a moment before sending another message.';
 
 const conversationKeyForEvent = (event: IncomingMessageEvent): string =>
   event.threadId ? `${event.chatId}:${event.threadId}` : event.chatId;
+
+const resolveWorkingDir = (input: string, projectRoot: string): string | null => {
+  if (input === '-') {
+    return null;
+  }
+
+  if (input.startsWith('~')) {
+    return path.join(os.homedir(), input.slice(1));
+  }
+
+  if (path.isAbsolute(input)) {
+    return input;
+  }
+
+  return path.resolve(projectRoot, input);
+};
 
 const tryParsePid = (value: string): number | null => {
   const parsed = Number.parseInt(value.trim(), 10);
@@ -93,6 +111,7 @@ export class BridgeService {
             `conversation: ${currentSession.conversationKey}`,
             `status: ${currentSession.status}`,
             `render_mode: ${currentSession.renderMode}`,
+            `working_dir: ${currentSession.workingDir ?? '(project root)'}`,
             `claude_session_id: ${currentSession.claudeSessionId ?? '(none)'}`,
             `updated_at: ${currentSession.updatedAt}`,
           ]
@@ -119,6 +138,38 @@ export class BridgeService {
     if (command.type === 'card') {
       this.sessionStore.updateSession(session.conversationKey, { renderMode: 'card' });
       await this.sendReply(event.messageId, 'Switched to rich card mode. Use /markdown or /md to switch back to plain text mode.');
+      this.sessionStore.markProcessed(event.eventId);
+      return;
+    }
+
+    if (command.type === 'cd') {
+      if (!command.path) {
+        const currentDir = session.workingDir ?? this.config.projectRoot;
+        await this.sendReply(event.messageId, `Current directory: ${currentDir}`);
+      } else {
+        const resolved = resolveWorkingDir(command.path, this.config.projectRoot);
+        if (resolved === null) {
+          // Reset to project root — also clear session since cwd changes
+          this.sessionStore.updateSession(session.conversationKey, {
+            workingDir: null,
+            claudeSessionId: null,
+          });
+          await this.sendReply(event.messageId, `Working directory reset to project root: ${this.config.projectRoot}\n(Claude session cleared — next message starts a fresh conversation)`);
+        } else if (!fs.existsSync(resolved) || !fs.statSync(resolved).isDirectory()) {
+          await this.sendReply(event.messageId, `Directory not found: ${resolved}`);
+        } else {
+          const hasClaudeConfig = fs.existsSync(path.join(resolved, '.claude'));
+          // Clear session since Claude sessions are scoped to working directory
+          this.sessionStore.updateSession(session.conversationKey, {
+            workingDir: resolved,
+            claudeSessionId: null,
+          });
+          const msg = hasClaudeConfig
+            ? `Working directory changed to: ${resolved}\n(.claude/ config detected — will be loaded on next message)\n(Claude session cleared — next message starts a fresh conversation)`
+            : `Working directory changed to: ${resolved}\n(Claude session cleared — next message starts a fresh conversation)`;
+          await this.sendReply(event.messageId, msg);
+        }
+      }
       this.sessionStore.markProcessed(event.eventId);
       return;
     }

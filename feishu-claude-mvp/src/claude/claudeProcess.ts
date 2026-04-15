@@ -145,10 +145,11 @@ export class ClaudeProcess {
 
   public runPrompt(session: SessionRecord, prompt: string): Promise<ClaudeRunResult> {
     const args = this.buildJsonArgs(session, prompt);
+    const cwd = session.workingDir ?? this.config.projectRoot;
 
     return new Promise((resolve, reject) => {
       const child = spawn(this.config.claudeCliPath, args, {
-        cwd: this.config.projectRoot,
+        cwd,
         env: this.buildChildEnv(),
         stdio: ['ignore', 'pipe', 'pipe'],
       });
@@ -195,12 +196,14 @@ export class ClaudeProcess {
     handlers: ClaudeStreamHandlers,
   ): Promise<ClaudeRunResult> {
     const args = this.buildStreamArgs(session, prompt);
+    const cwd = session.workingDir ?? this.config.projectRoot;
 
     return new Promise((resolve, reject) => {
       const childEnv = this.buildChildEnv();
       logger.info('Spawning Claude CLI', {
         cmd: this.config.claudeCliPath,
         args,
+        cwd,
         permissionMode: this.config.claudePermissionMode,
         ANTHROPIC_BASE_URL: childEnv.ANTHROPIC_BASE_URL,
         ANTHROPIC_AUTH_TOKEN: childEnv.ANTHROPIC_AUTH_TOKEN ? '(set)' : '(not set)',
@@ -208,7 +211,7 @@ export class ClaudeProcess {
         ANTHROPIC_DEFAULT_SONNET_MODEL: childEnv.ANTHROPIC_DEFAULT_SONNET_MODEL,
       });
       const child = spawn(this.config.claudeCliPath, args, {
-        cwd: this.config.projectRoot,
+        cwd,
         env: this.buildChildEnv(),
         stdio: ['ignore', 'pipe', 'pipe'],
       });

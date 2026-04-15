@@ -13,7 +13,7 @@ export type IncomingMessageEvent = {
 };
 
 
-export type SupportedCommand = 'help' | 'status' | 'reset' | 'markdown' | 'card' | 'prompt';
+export type SupportedCommand = 'help' | 'status' | 'reset' | 'markdown' | 'card' | 'cd' | 'prompt';
 
 export type Command =
   | { readonly type: 'help' }
@@ -21,4 +21,5 @@ export type Command =
   | { readonly type: 'reset' }
   | { readonly type: 'markdown' }
   | { readonly type: 'card' }
+  | { readonly type: 'cd'; readonly path: string }
   | { readonly type: 'prompt'; readonly prompt: string };
